@@ -41,19 +41,202 @@ CAR_BRANDS = [
     'Tesla', 'Lexus', 'Mazda', 'Volkswagen'
 ]
 
-def recognize_car_simple(image_base64):
-    """Упрощенное распознавание (случайный выбор)"""
-    # Для теста просто выбираем случайную марку
-    # Потом заменим на настоящее AI
-    brand = random.choice(CAR_BRANDS)
-    confidence = random.randint(75, 98)
+def recognize_car_ai(image_base64):
+    """Распознавание автомобиля через Replicate AI"""
+    try:
+        import replicate
+        import tempfile
+        
+        logger.info("Starting AI recognition...")
+        
+        # Декодируем base64
+        if ',' in image_base64:
+            image_data = base64.b64decode(image_base64.split(',')[1])
+        else:
+            image_data = base64.b64decode(image_base64)
+        
+        logger.info(f"Image decoded, size: {len(image_data)} bytes")
+        
+        # Проверка что изображение не пустое
+        if len(image_data) < 1000:
+            logger.warning("Image too small")
+            return {
+                'brand': 'Unknown',
+                'model': 'Image too small',
+                'confidence': 0,
+                'success': False
+            }
+        
+        # Сохраняем во временный файл
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp_file:
+            tmp_file.write(image_data)
+            tmp_path = tmp_file.name
+        
+        logger.info(f"Temporary file created: {tmp_path}")
+        
+        try:
+            # Используем BLIP-2 для анализа изображения
+            logger.info("Calling Replicate API...")
+            
+            output = replicate.run(
+                "andreasjansson/blip-2:4b32258c42e9efd4288bb9910bc532a69727f9acd26aa08e175713a0a857a608",
+                input={
+                    "image": open(tmp_path, "rb"),
+                    "question": "What is the car brand and model in this image? Answer with just the brand name and model.",
+                    "temperature": 0.5,
+                    "max_length": 50
+                }
+            )
+            
+            logger.info(f"AI Response: {output}")
+            
+            # Анализируем результат
+            description = str(output).lower().strip()
+            
+            # Извлекаем бренд из ответа AI
+            detected_brand = extract_brand_from_text(description)
+            detected_model = extract_model_from_text(description, detected_brand)
+            
+            # Определяем уверенность
+            if detected_brand != 'unknown':
+                confidence = 85
+            else:
+                # Пробуем альтернативный метод - просто описание
+                output2 = replicate.run(
+                    "salesforce/blip:2e1dddc8621f72155f24cf2e0adbde548458d3cab9f00c0139eea840d0ac4746",
+                    input={
+                        "image": open(tmp_path, "rb"),
+                        "task": "image_captioning"
+                    }
+                )
+                logger.info(f"AI Caption: {output2}")
+                description2 = str(output2).lower()
+                detected_brand = extract_brand_from_text(description2)
+                confidence = 70 if detected_brand != 'unknown' else 30
+            
+            return {
+                'brand': detected_brand.title(),
+                'model': detected_model or f'{detected_brand.title()} (AI detected)',
+                'confidence': confidence,
+                'success': True,
+                'ai_description': description
+            }
+            
+        finally:
+            # Удаляем временный файл
+            import os
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+                logger.info("Temporary file deleted")
+        
+    except Exception as e:
+        logger.error(f"AI Recognition error: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        
+        # Fallback на случайный выбор если AI не сработал
+        brand = random.choice(CAR_BRANDS)
+        return {
+            'brand': brand,
+            'model': f'{brand} (Fallback - AI error)',
+            'confidence': 20,
+            'success': False,
+            'error': str(e)
+        }
+
+
+def extract_brand_from_text(text):
+    """Извлекает бренд автомобиля из текста"""
+    # Расширенный список брендов
+    brands = [
+        # Премиум
+        'ferrari', 'lamborghini', 'porsche', 'bugatti', 'mclaren',
+        'aston martin', 'bentley', 'rolls royce', 'maserati',
+        
+        # Немецкие
+        'mercedes', 'bmw', 'audi', 'volkswagen', 'opel',
+        
+        # Японские
+        'toyota', 'honda', 'nissan', 'mazda', 'subaru', 
+        'mitsubishi', 'suzuki', 'lexus', 'infiniti', 'acura',
+        
+        # Американские
+        'ford', 'chevrolet', 'dodge', 'jeep', 'tesla',
+        'cadillac', 'lincoln', 'buick', 'gmc', 'ram',
+        
+        # Корейские
+        'hyundai', 'kia', 'genesis',
+        
+        # Другие
+        'volvo', 'jaguar', 'land rover', 'mini', 'fiat',
+        'peugeot', 'renault', 'citroen', 'skoda', 'seat',
+        'alfa romeo', 'lancia', 'saab'
+    ]
     
-    return {
-        'brand': brand,
-        'model': f'{brand} Model {random.randint(1, 9)}',
-        'confidence': confidence,
-        'success': True
+    text = text.lower().strip()
+    logger.info(f"Searching brand in: {text}")
+    
+    # Прямой поиск брендов
+    for brand in brands:
+        if brand in text:
+            logger.info(f"Found brand: {brand}")
+            return brand
+    
+    # Поиск по ключевым словам (если бренд не найден)
+    if any(word in text for word in ['luxury', 'premium', 'expensive']):
+        if 'german' in text:
+            return random.choice(['mercedes', 'bmw', 'audi'])
+        elif 'italian' in text:
+            return random.choice(['ferrari', 'lamborghini', 'maserati'])
+        return random.choice(['mercedes', 'bmw', 'lexus'])
+    
+    if any(word in text for word in ['suv', 'crossover']):
+        return random.choice(['toyota', 'honda', 'nissan', 'jeep'])
+    
+    if any(word in text for word in ['sports car', 'race', 'racing']):
+        return random.choice(['porsche', 'ferrari', 'bmw', 'corvette'])
+    
+    if any(word in text for word in ['sedan', 'saloon']):
+        return random.choice(['toyota', 'honda', 'mercedes'])
+    
+    if any(word in text for word in ['truck', 'pickup']):
+        return random.choice(['ford', 'chevrolet', 'ram', 'toyota'])
+    
+    if 'electric' in text or 'ev' in text:
+        return 'tesla'
+    
+    logger.warning("No brand found, returning unknown")
+    return 'unknown'
+
+
+def extract_model_from_text(text, brand):
+    """Извлекает модель автомобиля из текста"""
+    text = text.lower()
+    
+    # Известные модели по брендам
+    models = {
+        'toyota': ['camry', 'corolla', 'rav4', 'highlander', 'prius', 'supra', 'land cruiser'],
+        'honda': ['civic', 'accord', 'cr-v', 'pilot', 'odyssey'],
+        'bmw': ['3 series', '5 series', '7 series', 'x3', 'x5', 'm3', 'm5'],
+        'mercedes': ['c-class', 'e-class', 's-class', 'gle', 'glc', 'amg'],
+        'audi': ['a3', 'a4', 'a6', 'q3', 'q5', 'q7'],
+        'ford': ['f-150', 'mustang', 'explorer', 'escape', 'ranger'],
+        'tesla': ['model s', 'model 3', 'model x', 'model y'],
+        'porsche': ['911', 'cayenne', 'macan', 'panamera', 'taycan'],
     }
+    
+    if brand in models:
+        for model in models[brand]:
+            if model in text:
+                return model.title()
+    
+    # Поиск числовых моделей (типа 320i, Q5)
+    import re
+    number_model = re.search(r'\b[a-z]?\d{1,3}[a-z]?\b', text)
+    if number_model:
+        return number_model.group().upper()
+    
+    return None
 
 def calculate_points(brand, confidence, is_streak_bonus=False):
     """Расчет баллов"""
@@ -144,8 +327,8 @@ def upload_car():
         # Проверяем стрик
         streak_count, is_streak_active = check_streak(user_id)
         
-        # "Распознаем" автомобиль
-        car_info = recognize_car_simple(image_base64)
+        # Распознаем автомобиль через AI
+car_info = recognize_car_ai(image_base64)
         
         # Рассчитываем баллы
         points = calculate_points(
@@ -252,3 +435,5 @@ if __name__ == '__main__':
     PORT = int(os.getenv('PORT', 5000))
     logger.info(f"Starting server on port {PORT}")
     app.run(host='0.0.0.0', port=PORT, debug=True)
+
+
