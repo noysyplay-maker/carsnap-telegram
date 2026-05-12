@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CarSnap</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 16px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 24px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        h1 {
+            font-size: 32px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 16px;
+        }
+
+        .stats {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            flex: 1;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 16px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .upload-section {
+            background: #f8f9fa;
+            border-radius: 16px;
+            padding: 24px;
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .upload-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 16px 32px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: transform 0.2s;
+        }
+
+        .upload-btn:active {
+            transform: scale(0.95);
+        }
+
+        .preview {
+            margin: 16px 0;
+            display: none;
+        }
+
+        .preview img {
+            width: 100%;
+            border-radius: 12px;
+            max-height: 300px;
+            object-fit: cover;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 12px;
+            background: #e9ecef;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .content {
+            display: none;
+        }
+
+        .content.active {
+            display: block;
+        }
+
+        .feed-item {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+
+        .feed-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .username {
+            font-weight: bold;
+        }
+
+        .time {
+            font-size: 12px;
+            color: #6c757d;
+        }
+
+        .feed-img {
+            width: 100%;
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+
+        .car-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .car-name {
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .points {
+            background: #ffd700;
+            color: #000;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+
+        .leader-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+
+        .rank {
+            font-size: 20px;
+            font-weight: bold;
+            width: 30px;
+        }
+
+        .rank.gold { color: #ffd700; }
+        .rank.silver { color: #c0c0c0; }
+        .rank.bronze { color: #cd7f32; }
+
+        .leader-info {
+            flex: 1;
+        }
+
+        .leader-name {
+            font-weight: bold;
+        }
+
+        .leader-stats {
+            font-size: 12px;
+            color: #6c757d;
+        }
+
+        .loader {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚗 CarSnap</h1>
+            <p>Фоткай авто - зарабатывай баллы!</p>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-value" id="userPoints">0</div>
+                <div class="stat-label">Баллов</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="userStreak">0</div>
+                <div class="stat-label">🔥 Стрик</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="userCars">0</div>
+                <div class="stat-label">Авто</div>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('upload')">📷 Загрузить</button>
+            <button class="tab" onclick="showTab('feed')">📰 Лента</button>
+            <button class="tab" onclick="showTab('leaders')">🏆 Топ</button>
+        </div>
+
+        <!-- Upload Tab -->
+        <div id="upload" class="content active">
+            <div class="upload-section">
+                <h3>Сделай фото автомобиля</h3>
+                <p style="margin: 12px 0; color: #6c757d;">
+                    Постоянный стрик = больше очков! 🔥
+                </p>
+                <input type="file" id="fileInput" accept="image/*" capture="environment" style="display: none;">
+                <button class="upload-btn" onclick="selectFile()">
+                    <span>📷</span>
+                    <span>Выбрать фото</span>
+                </button>
+                <div class="preview" id="preview">
+                    <img id="previewImg" alt="Preview">
+                    <button class="upload-btn" onclick="uploadPhoto()" style="margin-top: 12px;">
+                        ✅ Отправить
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Feed Tab -->
+        <div id="feed" class="content">
+            <div id="feedContainer"></div>
+            <div class="loader hidden" id="feedLoader">
+                <div class="spinner"></div>
+            </div>
+        </div>
+
+        <!-- Leaders Tab -->
+        <div id="leaders" class="content">
+            <div id="leadersContainer"></div>
+        </div>
+    </div>
+
+    <script>
+        // Telegram WebApp
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        tg.ready();
+
+        // ВАЖНО: Измени на свой URL когда задеплоишь!
+        const API_URL = 'http://127.0.0.1:5000/api';
+
+        // Данные пользователя
+        const userData = {
+            user_id: tg.initDataUnsafe?.user?.id || Math.random().toString(),
+            username: tg.initDataUnsafe?.user?.username || 'TestUser' + Math.floor(Math.random() * 1000),
+            first_name: tg.initDataUnsafe?.user?.first_name || 'User'
+        };
+
+        let selectedFile = null;
+
+       // Инициализация
+async function init() {
+    console.log('Initializing app...');
+    console.log('API URL:', API_URL);
+    
+    try {
+        console.log('Sending init request...');
+        const response = await fetch(`${API_URL}/init`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(userData)
+        });
+        
+        console.log('Response status:', response.status);
+        const data = await response.json();
+        console.log('Response data:', data);
+        
+        if (data.success) {
+            updateStats(data.user, data.streak);
+            console.log('Init successful!');
+        } else {
+            console.error('Init failed:', data);
+            alert('Ошибка инициализации: ' + JSON.stringify(data));
+        }
+    } catch (error) {
+        console.error('Init error:', error);
+        alert('Ошибка подключения к серверу!\n\nПроверь:\n1. Запущен ли backend.py?\n2. Открой терминал и введи: python3 backend.py\n\nОшибка: ' + error.message);
+    }
+}
+
+        function updateStats(user, streak) {
+            document.getElementById('userPoints').textContent = user.total_points || 0;
+            document.getElementById('userStreak').textContent = streak || 0;
+            document.getElementById('userCars').textContent = user.cars_spotted || 0;
+        }
+
+        function selectFile() {
+            document.getElementById('fileInput').click();
+        }
+
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                selectedFile = file;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    document.getElementById('previewImg').src = e.target.result;
+                    document.getElementById('preview').style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        async function uploadPhoto() {
+            if (!selectedFile) return;
+
+            try {
+                const base64 = await fileToBase64(selectedFile);
+                
+                const response = await fetch(`${API_URL}/upload`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: userData.user_id,
+                        username: userData.username,
+                        image: base64
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert(`🎉 +${data.car.points} баллов!\n\n🚗 ${data.car.brand}\n🔥 Стрик: ${data.streak} дней`);
+                    updateStats({ 
+                        total_points: data.new_total_points, 
+                        cars_spotted: 0 
+                    }, data.streak);
+                    
+                    document.getElementById('preview').style.display = 'none';
+                    document.getElementById('fileInput').value = '';
+                    selectedFile = null;
+                    
+                    loadFeed();
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                alert('Ошибка загрузки');
+            }
+        }
+
+        async function loadFeed() {
+            document.getElementById('feedLoader').classList.remove('hidden');
+            
+            try {
+                const response = await fetch(`${API_URL}/feed?limit=20`);
+                const data = await response.json();
+
+                const container = document.getElementById('feedContainer');
+                container.innerHTML = '';
+
+                data.cars.forEach(car => {
+                    const item = document.createElement('div');
+                    item.className = 'feed-item';
+                    item.innerHTML = `
+                        <div class="feed-header">
+                            <div>
+                                <div class="username">${car.username}</div>
+                                <div class="time">${formatTime(car.timestamp)}</div>
+                            </div>
+                            ${car.streak_bonus ? '<span style="background:#ff6b6b;color:white;padding:4px 8px;border-radius:8px;font-size:12px;">🔥 Стрик</span>' : ''}
+                        </div>
+                        <img src="${car.image}" class="feed-img">
+                        <div class="car-info">
+                            <div>
+                                <div class="car-name">${car.brand}</div>
+                                <div style="font-size:12px;color:#6c757d;">${car.model}</div>
+                            </div>
+                            <div class="points">+${car.points}</div>
+                        </div>
+                    `;
+                    container.appendChild(item);
+                });
+            } catch (error) {
+                console.error('Feed error:', error);
+            } finally {
+                document.getElementById('feedLoader').classList.add('hidden');
+            }
+        }
+
+        async function loadLeaders() {
+            try {
+                const response = await fetch(`${API_URL}/leaderboard`);
+                const data = await response.json();
+
+                const container = document.getElementById('leadersContainer');
+                container.innerHTML = '';
+
+                data.leaderboard.forEach(user => {
+                    let rankClass = '';
+                    if (user.rank === 1) rankClass = 'gold';
+                    else if (user.rank === 2) rankClass = 'silver';
+                    else if (user.rank === 3) rankClass = 'bronze';
+
+                    const item = document.createElement('div');
+                    item.className = 'leader-item';
+                    item.innerHTML = `
+                        <div class="rank ${rankClass}">#${user.rank}</div>
+                        <div class="leader-info">
+                            <div class="leader-name">${user.username}</div>
+                            <div class="leader-stats">🚗 ${user.cars_spotted} авто • 🔥 ${user.streak} дней</div>
+                        </div>
+                        <div style="font-size:20px;font-weight:bold;color:#667eea;">${user.total_points}</div>
+                    `;
+                    container.appendChild(item);
+                });
+            } catch (error) {
+                console.error('Leaders error:', error);
+            }
+        }
+
+        function showTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tab).classList.add('active');
+
+            if (tab === 'feed') loadFeed();
+            if (tab === 'leaders') loadLeaders();
+        }
+
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
+            });
+        }
+
+        function formatTime(iso) {
+            const date = new Date(iso);
+            const now = new Date();
+            const diff = now - date;
+            
+            if (diff < 60000) return 'только что';
+            if (diff < 3600000) return `${Math.floor(diff/60000)} мин назад`;
+            if (diff < 86400000) return `${Math.floor(diff/3600000)} ч назад`;
+            return `${Math.floor(diff/86400000)} дн назад`;
+        }
+
+        // Запуск
+        init();
+    </script>
+</body>
+</html>
