@@ -322,13 +322,37 @@ def upload_car():
         if not image_base64 or not user_id:
             return jsonify({'error': 'Missing data'}), 400
         
+        # Проверяем что изображение не слишком маленькое
+        try:
+            if ',' in image_base64:
+                img_data = image_base64.split(',')[1]
+            else:
+                img_data = image_base64
+            
+            decoded_size = len(base64.b64decode(img_data))
+            
+            if decoded_size < 1000:  # Меньше 1KB
+                return jsonify({
+                    'error': 'Image too small or empty',
+                    'success': False
+                }), 400
+                
+            logger.info(f"Image size: {decoded_size} bytes")
+            
+        except Exception as e:
+            logger.error(f"Image validation error: {e}")
+            return jsonify({
+                'error': 'Invalid image data',
+                'success': False
+            }), 400
+        
         logger.info(f"Upload from user: {username}")
         
         # Проверяем стрик
         streak_count, is_streak_active = check_streak(user_id)
         
         # Распознаем автомобиль через AI
-car_info = recognize_car_ai(image_base64)
+        car_info = recognize_car_ai(image_base64)
         
         # Рассчитываем баллы
         points = calculate_points(
@@ -371,6 +395,10 @@ car_info = recognize_car_ai(image_base64)
             'new_total_points': users_db[user_id]['total_points'],
             'streak': streaks_db[user_id]['count']
         }), 200
+        
+    except Exception as e:
+        logger.error(f"Upload error: {e}")
+        return jsonify({'error': str(e)}), 500
         
     except Exception as e:
         logger.error(f"Upload error: {e}")
